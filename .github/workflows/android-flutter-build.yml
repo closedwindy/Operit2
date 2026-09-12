@@ -75,7 +75,7 @@ jobs:
       FVM_VERSION: 4.1.2
       TYPESCRIPT_VERSION: 5.9.3
       WASM_BINDGEN_VERSION: 0.2.122
-      WASI_SDK_VERSION: "20.0"
+      WASI_SDK_VERSION: "20"
       QUICKJS_WASM_SYS_WASI_SDK_MAJOR_VERSION: 20
       QUICKJS_WASM_SYS_WASI_SDK_MINOR_VERSION: 0
 
@@ -139,34 +139,23 @@ jobs:
             throw "Android bindgen libclang was not prepared at $libclang"
           }
 
-      - name: Restore Android signing material
+      # Replaces the upstream "Restore Android signing material" step.
+      # Generates a throwaway release keystore on the runner so the build needs
+      # no repository secrets. The resulting APKs are signed with this key.
+      - name: Generate Android signing material
         shell: pwsh
-        env:
-          ANDROID_RELEASE_KEYSTORE_BASE64: ${{ secrets.ANDROID_RELEASE_KEYSTORE_BASE64 }}
-          ANDROID_RELEASE_STORE_PASSWORD: ${{ secrets.ANDROID_RELEASE_STORE_PASSWORD }}
-          ANDROID_RELEASE_KEY_ALIAS: ${{ secrets.ANDROID_RELEASE_KEY_ALIAS }}
-          ANDROID_RELEASE_KEY_PASSWORD: ${{ secrets.ANDROID_RELEASE_KEY_PASSWORD }}
         run: |
-          $required = @(
-            "ANDROID_RELEASE_KEYSTORE_BASE64",
-            "ANDROID_RELEASE_STORE_PASSWORD",
-            "ANDROID_RELEASE_KEY_ALIAS",
-            "ANDROID_RELEASE_KEY_PASSWORD"
-          )
-          $missing = $required | Where-Object { [string]::IsNullOrWhiteSpace([Environment]::GetEnvironmentVariable($_)) }
-          if ($missing.Count -gt 0) {
-            throw "Missing required GitHub Actions secrets: $($missing -join ', ')"
-          }
           $secretsDir = "tools/release/secrets"
           New-Item -ItemType Directory -Force -Path $secretsDir | Out-Null
-          $keystore = Join-Path $secretsDir "operit2-release.keystore"
-          [System.IO.File]::WriteAllBytes($keystore, [System.Convert]::FromBase64String($env:ANDROID_RELEASE_KEYSTORE_BASE64))
-          @"
-          RELEASE_STORE_FILE=operit2-release.keystore
-          RELEASE_STORE_PASSWORD=$env:ANDROID_RELEASE_STORE_PASSWORD
-          RELEASE_KEY_ALIAS=$env:ANDROID_RELEASE_KEY_ALIAS
-          RELEASE_KEY_PASSWORD=$env:ANDROID_RELEASE_KEY_PASSWORD
-          "@ | Set-Content -Path (Join-Path $secretsDir "android-signing.properties") -Encoding utf8
+          $keystoreName = "operit2-release.keystore"
+          $keystorePath = Join-Path $secretsDir $keystoreName
+          keytool -genkeypair -v -keystore $keystorePath -alias operit2 -keyalg RSA -keysize 2048 -validity 10000 -storepass operit2ci -keypass operit2ci -dname "CN=Operit2 CI, OU=CI, O=CI, L=NA, ST=NA, C=CN"
+          Set-Content -Path (Join-Path $secretsDir "android-signing.properties") -Encoding utf8 -Value @(
+            "RELEASE_STORE_FILE=$keystoreName"
+            "RELEASE_STORE_PASSWORD=operit2ci"
+            "RELEASE_KEY_ALIAS=operit2"
+            "RELEASE_KEY_PASSWORD=operit2ci"
+          )
 
       - name: Check build environment
         shell: pwsh
