@@ -54,50 +54,40 @@ jobs:
       - name: Prepare Android runtime (placeholder)
         run: |
           for abi in arm64-v8a armeabi-v7a x86_64; do
-            mkdir -p apps/flutter/app/android/app/src/main/jniLibs/$abi
-            mkdir -p apps/flutter/app/android/app/src/main/assets/android-runtime/$abi
-            # create empty placeholder libs
-            for lib in libbash liboperit_busybox liboperit_loader liboperit_proot; do
-              touch apps/flutter/app/android/app/src/main/jniLibs/$abi/$lib.so
+            mkdir -p apps/flutter/app/android/app/src/main/jniLibs/            mkdir -p apps/flutter/app/android/app/src/main/assets/android-runtime/            for lib in libbash liboperit_busybox liboperit_loader liboperit_proot; do
+              touch apps/flutter/app/android/app/src/main/jniLibs/\/\.so
             done
-            # create placeholder rootfs
-            echo "placeholder" | gzip > /tmp/rootfs.gz
-            cp /tmp/rootfs.gz apps/flutter/app/android/app/src/main/assets/android-runtime/$abi/rootfs.tar.gz.bin
-            sha256sum apps/flutter/app/android/app/src/main/assets/android-runtime/$abi/rootfs.tar.gz.bin | awk '{print $1}' > apps/flutter/app/android/app/src/main/assets/android-runtime/$abi/rootfs.tar.gz.bin.sha256
+            echo placeholder | gzip > /tmp/rootfs.gz
+            cp /tmp/rootfs.gz apps/flutter/app/android/app/src/main/assets/android-runtime/\/rootfs.tar.gz.bin
+            sha256sum apps/flutter/app/android/app/src/main/assets/android-runtime/\/rootfs.tar.gz.bin | awk '{print \}' > apps/flutter/app/android/app/src/main/assets/android-runtime/\/rootfs.tar.gz.bin.sha256
           done
 
       - name: Prepare signing (debug)
         run: |
           mkdir -p tools/release/secrets
-          keytool -genkey -v -keystore tools/release/secrets/operit2-release.keystore \
-            -storepass android -alias androiddebugkey -keypass android \
-            -keyalg RSA -keysize 2048 -validity 10000 \
-            -dname 'CN=Debug,O=Debug,C=US'
-          cat > tools/release/secrets/android-signing.properties <<EOF
-          RELEASE_STORE_FILE=operit2-release.keystore
-          RELEASE_STORE_PASSWORD=android
-          RELEASE_KEY_ALIAS=androiddebugkey
-          RELEASE_KEY_PASSWORD=android
-          EOF
+          keytool -genkey -v -keystore tools/release/secrets/operit2-release.keystore             -storepass android -alias androiddebugkey -keypass android             -keyalg RSA -keysize 2048 -validity 10000             -dname CN=Debug,O=Debug,C=US
+          printf 'RELEASE_STORE_FILE=operit2-release.keystore
+RELEASE_STORE_PASSWORD=android
+RELEASE_KEY_ALIAS=androiddebugkey
+RELEASE_KEY_PASSWORD=android
+' > tools/release/secrets/android-signing.properties
 
       - name: Prepare Web Access (placeholder)
         run: |
           mkdir -p apps/web_access/build/bundle
           for f in index.html main.dart.js operit_flutter_bridge.js operit_flutter_bridge_bg.wasm sql-wasm.js sql-wasm.wasm; do
-            touch apps/web_access/build/bundle/$f
-          done
+            touch apps/web_access/build/bundle/          done
           echo '{"version":"0.0.0"}' > apps/web_access/build/bundle/web_access_version.json
 
       - name: Configure local.properties
         run: |
-          cat > apps/flutter/app/android/local.properties <<EOF
-          sdk.dir=$ANDROID_HOME
-          flutter.sdk=$FLUTTER_ROOT
-          RELEASE_STORE_FILE=${{ github.workspace }}/tools/release/secrets/operit2-release.keystore
-          RELEASE_STORE_PASSWORD=android
-          RELEASE_KEY_ALIAS=androiddebugkey
-          RELEASE_KEY_PASSWORD=android
-          EOF
+          printf 'sdk.dir=%s
+flutter.sdk=%s
+RELEASE_STORE_FILE=%s/tools/release/secrets/operit2-release.keystore
+RELEASE_STORE_PASSWORD=android
+RELEASE_KEY_ALIAS=androiddebugkey
+RELEASE_KEY_PASSWORD=android
+' "" "" "" > apps/flutter/app/android/local.properties
 
       - name: Fix build.gradle.kts for Linux
         run: |
@@ -108,18 +98,34 @@ jobs:
       - name: Generate Dart proxy artifacts
         run: cargo check --manifest-path core/crates/proxy/local/Cargo.toml --quiet
 
-      - name: Fix video_player version
-        run: |
-          sed -i 's/video_player: ^2.11.1/video_player: ^2.10.1/' apps/flutter/app/pubspec.yaml
-
-      - name: Remove ohos deps
+      - name: Fix video_player and remove ohos
         run: |
           cd apps/flutter/app
-          sed -i '/video_player_ohos:/,/path: packages\/video_player\/video_player_ohos/s/^/#/' pubspec.yaml
-          sed -i '/path_provider_ohos:/,/path: packages\/path_provider\/path_provider_ohos/s/^/#/' pubspec.yaml
-          sed -i '/record_ohos:/s/^/#/' pubspec.yaml
-          sed -i '/url_launcher_ohos:/,/path: packages\/url_launcher\/url_launcher_ohos/s/^/#/' pubspec.yaml
-          sed -i '/file_selector_ohos:/,/path: ..\/thirdparty\/file_selector_ohos/s/^/#/' pubspec.yaml
+          sed -i 's/video_player: ^2.11.1/video_player: ^2.10.1/' pubspec.yaml
+          python3 -c """
+import re
+text = open('pubspec.yaml').read()
+for p in [
+    r'
+  video_player_ohos:.*?
+  (?=\w)',
+    r'
+  path_provider_ohos:.*?
+  (?=\w)',
+    r'
+  record_ohos:.*?
+  (?=\w)',
+    r'
+  url_launcher_ohos:.*?
+  (?=\w)',
+    r'
+  file_selector_ohos:.*?
+  (?=\w)',
+]:
+    text = re.sub(p, '
+', text, flags=re.DOTALL)
+open('pubspec.yaml', 'w').write(text)
+"""
 
       - name: Build APK
         run: |
