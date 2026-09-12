@@ -1,0 +1,133 @@
+name: Operit2 Android Build
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 120
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install system deps
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y bison build-essential bzip2 ca-certificates curl diffutils flex gawk gzip patch pkg-config tar unzip xz-utils
+
+      - name: Install Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Install Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - name: Install Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Install TypeScript
+        run: npm install -g typescript@5.7
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: 1.95.0
+          targets: aarch64-linux-android,armv7-linux-androideabi,x86_64-linux-android
+
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Install NDK and build-tools
+        run: |
+          sdkmanager "ndk;28.2.13676358" "build-tools;36.0.0" "cmake;3.31.6"
+
+      - name: Prepare Android runtime placeholders
+        run: |
+          for abi in arm64-v8a armeabi-v7a x86_64; do
+            mkdir -p apps/flutter/app/android/app/src/main/jniLibs/$abi
+            mkdir -p apps/flutter/app/android/app/src/main/assets/android-runtime/$abi
+            for lib in libbash liboperit_busybox liboperit_loader liboperit_proot; do
+              touch apps/flutter/app/android/app/src/main/jniLibs/$abi/$lib.so
+            done
+            echo placeholder | gzip > apps/flutter/app/android/app/src/main/assets/android-runtime/$abi/rootfs.tar.gz.bin
+            sha256sum apps/flutter/app/android/app/src/main/assets/android-runtime/$abi/rootfs.tar.gz.bin | awk '{print $1}' > apps/flutter/app/android/app/src/main/assets/android-runtime/$abi/rootfs.tar.gz.bin.sha256
+          done
+
+      - name: Prepare debug signing
+        run: |
+          mkdir -p tools/release/secrets
+          keytool -genkey -v -keystore tools/release/secrets/operit2-release.keystore \
+            -storepass android -alias androiddebugkey -keypass android \
+            -keyalg RSA -keysize 2048 -validity 10000 -dname CN=Debug,O=Debug,C=US
+          printf 'RELEASE_STORE_FILE=operit2-release.keystore\nRELEASE_STORE_PASSWORD=android\nRELEASE_KEY_ALIAS=androiddebugkey\nRELEASE_KEY_PASSWORD=android\n' > tools/release/secrets/android-signing.properties
+
+      - name: Prepare Web Access placeholders
+        run: |
+          mkdir -p apps/web_access/build/bundle
+          for f in index.html main.dart.js operit_flutter_bridge.js operit_flutter_bridge_bg.wasm sql-wasm.js sql-wasm.wasm; do
+            touch apps/web_access/build/bundle/$f
+          done
+          echo '{"version":"0.0.0"}' > apps/web_access/build/bundle/web_access_version.json
+
+      - name: Configure local.properties
+        run: |
+          cat > apps/flutter/app/android/local.properties << EOF
+          sdk.dir=$ANDROID_HOME
+          flutter.sdk=$FLUTTER_ROOT
+          RELEASE_STORE_FILE=$GITHUB_WORKSPACE/tools/release/secrets/operit2-release.keystore
+          RELEASE_STORE_PASSWORD=android
+          RELEASE_KEY_ALIAS=androiddebugkey
+          RELEASE_KEY_PASSWORD=android
+          EOF
+
+      - name: Fix build.gradle.kts for Linux
+        run: |
+          sed -i 's/windows-x86_64/linux-x86_64/g' apps/flutter/app/android/app/build.gradle.kts
+          sed -i 's/\.cmd//g' apps/flutter/app/android/app/build.gradle.kts
+          sed -i 's/\.exe//g' apps/flutter/app/android/app/build.gradle.kts
+
+      - name: Generate Dart proxy artifacts
+        run: cargo check --manifest-path core/crates/proxy/local/Cargo.toml --quiet
+
+      - name: Fix video_player and remove ohos
+        run: |
+          cd apps/flutter/app
+          sed -i 's/video_player: ^2.11.1/video_player: ^2.10.1/' pubspec.yaml
+          cat > /tmp/remove_ohos.py << 'PYSCRIPT'
+import re
+text = open('pubspec.yaml').read()
+for p in [
+    r'\n  video_player_ohos:.*?\n  (?=\w)',
+    r'\n  path_provider_ohos:.*?\n  (?=\w)',
+    r'\n  record_ohos:.*?\n  (?=\w)',
+    r'\n  url_launcher_ohos:.*?\n  (?=\w)',
+    r'\n  file_selector_ohos:.*?\n  (?=\w)',
+]:
+    text = re.sub(p, '\n', text, flags=re.DOTALL)
+open('pubspec.yaml', 'w').write(text)
+PYSCRIPT
+          python3 /tmp/remove_ohos.py
+
+      - name: Build APK
+        run: |
+          cd apps/flutter/app
+          flutter pub get
+          flutter build apk --release --split-per-abi --target-platform android-arm64 --android-skip-build-dependency-validation
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: operit2-android-arm64
+          path: apps/flutter/app/build/app/outputs/flutter-apk/app-arm64-v8a-release.apk
+          if-no-files-found: error
+          retention-days: 14
