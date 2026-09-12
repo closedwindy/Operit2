@@ -81,7 +81,7 @@ jobs:
 
       - name: Configure local.properties
         run: |
-          cat > apps/flutter/app/android/local.properties << EOF
+          cat > apps/flutter/app/android/local.properties <<EOF
           sdk.dir=$ANDROID_HOME
           flutter.sdk=$FLUTTER_ROOT
           RELEASE_STORE_FILE=$GITHUB_WORKSPACE/tools/release/secrets/operit2-release.keystore
@@ -102,31 +102,20 @@ jobs:
       - name: Fix video_player and remove ohos
         run: |
           cd apps/flutter/app
-          sed -i 's/video_player: \^2\.11\.1/video_player: ^2.10.1/' pubspec.yaml
+          sed -i 's/video_player: ^2.11.1/video_player: ^2.10.1/' pubspec.yaml
           cat > /tmp/remove_ohos.py << 'PYSCRIPT'
-          import re
-          text = open('pubspec.yaml').read()
-          for p in [
-              r'
-  video_player_ohos:.*?
-  (?=\w)',
-              r'
-  path_provider_ohos:.*?
-  (?=\w)',
-              r'
-  record_ohos:.*?
-  (?=\w)',
-              r'
-  url_launcher_ohos:.*?
-  (?=\w)',
-              r'
-  file_selector_ohos:.*?
-  (?=\w)',
-          ]:
-              text = re.sub(p, '
-', text, flags=re.DOTALL)
-          open('pubspec.yaml', 'w').write(text)
-          PYSCRIPT
+import re
+text = open('pubspec.yaml').read()
+for p in [
+    r'\n  video_player_ohos:.*?\n  (?=\w)',
+    r'\n  path_provider_ohos:.*?\n  (?=\w)',
+    r'\n  record_ohos:.*?\n  (?=\w)',
+    r'\n  url_launcher_ohos:.*?\n  (?=\w)',
+    r'\n  file_selector_ohos:.*?\n  (?=\w)',
+]:
+    text = re.sub(p, '\n', text, flags=re.DOTALL)
+open('pubspec.yaml', 'w').write(text)
+PYSCRIPT
           python3 /tmp/remove_ohos.py
 
       - name: Build APK
