@@ -254,3 +254,4 @@ Operit2 仍然是一项长期工程。我们欢迎代码、文档、测试、平
 ## 许可证
 
 仓库根目录的 [`LICENSE`](LICENSE) 当前为 GNU Affero General Public License v3.0（AGPL-3.0）。具体 crate、插件、ToolPkg、Web bundle、vendored 代码和第三方依赖可能附带自己的许可证或元数据；使用、分发或修改具体组件前，请同时核对该组件目录中的声明。
+# bump
