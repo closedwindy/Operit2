@@ -1,5 +1,9 @@
 name: Operit2 Android Build
 on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/operit2-build.yml'
   workflow_dispatch:
 
 permissions:
@@ -66,10 +70,10 @@ jobs:
       - name: Prepare debug signing
         run: |
           mkdir -p tools/release/secrets
-          keytool -genkey -v -keystore tools/release/secrets/operit2-release.keystore \\
-            -storepass android -alias androiddebugkey -keypass android \\
+          keytool -genkey -v -keystore tools/release/secrets/operit2-release.keystore \
+            -storepass android -alias androiddebugkey -keypass android \
             -keyalg RSA -keysize 2048 -validity 10000 -dname CN=Debug,O=Debug,C=US
-          printf 'RELEASE_STORE_FILE=operit2-release.keystore\\nRELEASE_STORE_PASSWORD=android\\nRELEASE_KEY_ALIAS=androiddebugkey\\nRELEASE_KEY_PASSWORD=android\\n' > tools/release/secrets/android-signing.properties
+          printf 'RELEASE_STORE_FILE=operit2-release.keystore\nRELEASE_STORE_PASSWORD=android\nRELEASE_KEY_ALIAS=androiddebugkey\nRELEASE_KEY_PASSWORD=android\n' > tools/release/secrets/android-signing.properties
 
       - name: Prepare Web Access placeholders
         run: |
@@ -93,8 +97,8 @@ jobs:
       - name: Fix build.gradle.kts for Linux
         run: |
           sed -i 's/windows-x86_64/linux-x86_64/g' apps/flutter/app/android/app/build.gradle.kts
-          sed -i 's/\\.cmd//g' apps/flutter/app/android/app/build.gradle.kts
-          sed -i 's/\\.exe//g' apps/flutter/app/android/app/build.gradle.kts
+          sed -i 's/\.cmd//g' apps/flutter/app/android/app/build.gradle.kts
+          sed -i 's/\.exe//g' apps/flutter/app/android/app/build.gradle.kts
 
       - name: Generate Dart proxy artifacts
         run: cargo check --manifest-path core/crates/proxy/local/Cargo.toml --quiet
@@ -105,16 +109,16 @@ jobs:
           sed -i 's/video_player: ^2.11.1/video_player: ^2.10.1/' pubspec.yaml
           cat > /tmp/remove_ohos.py << 'PYSCRIPT'
 import re
-text = open('pubspec.yaml').read()
+text = open("pubspec.yaml").read()
 for p in [
-    r'\\n  video_player_ohos:.*?\\n  (?=\\w)',
-    r'\\n  path_provider_ohos:.*?\\n  (?=\\w)',
-    r'\\n  record_ohos:.*?\\n  (?=\\w)',
-    r'\\n  url_launcher_ohos:.*?\\n  (?=\\w)',
-    r'\\n  file_selector_ohos:.*?\\n  (?=\\w)',
+    r"\n  video_player_ohos:.*?\n  (?=\w)",
+    r"\n  path_provider_ohos:.*?\n  (?=\w)",
+    r"\n  record_ohos:.*?\n  (?=\w)",
+    r"\n  url_launcher_ohos:.*?\n  (?=\w)",
+    r"\n  file_selector_ohos:.*?\n  (?=\w)",
 ]:
-    text = re.sub(p, '\\n', text, flags=re.DOTALL)
-open('pubspec.yaml', 'w').write(text)
+    text = re.sub(p, "\n", text, flags=re.DOTALL)
+open("pubspec.yaml", "w").write(text)
 PYSCRIPT
           python3 /tmp/remove_ohos.py
 
@@ -131,4 +135,3 @@ PYSCRIPT
           path: apps/flutter/app/build/app/outputs/flutter-apk/app-arm64-v8a-release.apk
           if-no-files-found: error
           retention-days: 14
-# trigger
