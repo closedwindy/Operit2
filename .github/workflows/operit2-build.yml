@@ -1,9 +1,5 @@
 name: Operit2 Android Build
 on:
-  push:
-    branches: [main]
-    paths:
-      - '.github/workflows/operit2-build.yml'
   workflow_dispatch:
 
 permissions:
@@ -70,10 +66,10 @@ jobs:
       - name: Prepare debug signing
         run: |
           mkdir -p tools/release/secrets
-          keytool -genkey -v -keystore tools/release/secrets/operit2-release.keystore \\
-            -storepass android -alias androiddebugkey -keypass android \\
+          keytool -genkey -v -keystore tools/release/secrets/operit2-release.keystore \
+            -storepass android -alias androiddebugkey -keypass android \
             -keyalg RSA -keysize 2048 -validity 10000 -dname CN=Debug,O=Debug,C=US
-          printf 'RELEASE_STORE_FILE=operit2-release.keystore\\nRELEASE_STORE_PASSWORD=android\\nRELEASE_KEY_ALIAS=androiddebugkey\\nRELEASE_KEY_PASSWORD=android\\n' > tools/release/secrets/android-signing.properties
+          printf 'RELEASE_STORE_FILE=operit2-release.keystore\nRELEASE_STORE_PASSWORD=android\nRELEASE_KEY_ALIAS=androiddebugkey\nRELEASE_KEY_PASSWORD=android\n' > tools/release/secrets/android-signing.properties
 
       - name: Prepare Web Access placeholders
         run: |
@@ -85,20 +81,13 @@ jobs:
 
       - name: Configure local.properties
         run: |
-          cat > apps/flutter/app/android/local.properties << EOF
-          sdk.dir=$ANDROID_HOME
-          flutter.sdk=$FLUTTER_ROOT
-          RELEASE_STORE_FILE=$GITHUB_WORKSPACE/tools/release/secrets/operit2-release.keystore
-          RELEASE_STORE_PASSWORD=android
-          RELEASE_KEY_ALIAS=androiddebugkey
-          RELEASE_KEY_PASSWORD=android
-          EOF
+          printf 'sdk.dir=%s\nflutter.sdk=%s\nRELEASE_STORE_FILE=%s/tools/release/secrets/operit2-release.keystore\nRELEASE_STORE_PASSWORD=android\nRELEASE_KEY_ALIAS=androiddebugkey\nRELEASE_KEY_PASSWORD=android\n' "$ANDROID_HOME" "$FLUTTER_ROOT" "$GITHUB_WORKSPACE" > apps/flutter/app/android/local.properties
 
       - name: Fix build.gradle.kts for Linux
         run: |
           sed -i 's/windows-x86_64/linux-x86_64/g' apps/flutter/app/android/app/build.gradle.kts
-          sed -i 's/\\.cmd//g' apps/flutter/app/android/app/build.gradle.kts
-          sed -i 's/\\.exe//g' apps/flutter/app/android/app/build.gradle.kts
+          sed -i 's/\.cmd//g' apps/flutter/app/android/app/build.gradle.kts
+          sed -i 's/\.exe//g' apps/flutter/app/android/app/build.gradle.kts
 
       - name: Generate Dart proxy artifacts
         run: cargo check --manifest-path core/crates/proxy/local/Cargo.toml --quiet
@@ -107,20 +96,20 @@ jobs:
         run: |
           cd apps/flutter/app
           sed -i 's/video_player: ^2.11.1/video_player: ^2.10.1/' pubspec.yaml
-          cat > /tmp/remove_ohos.py << 'PYSCRIPT'
-import re
-text = open("pubspec.yaml").read()
-for p in [
-    r"\\n  video_player_ohos:.*?\\n  (?=\\w)",
-    r"\\n  path_provider_ohos:.*?\\n  (?=\\w)",
-    r"\\n  record_ohos:.*?\\n  (?=\\w)",
-    r"\\n  url_launcher_ohos:.*?\\n  (?=\\w)",
-    r"\\n  file_selector_ohos:.*?\\n  (?=\\w)",
-]:
-    text = re.sub(p, "\\n", text, flags=re.DOTALL)
-open("pubspec.yaml", "w").write(text)
-PYSCRIPT
-          python3 /tmp/remove_ohos.py
+          python3 -c "
+          import re
+          text = open('pubspec.yaml').read()
+          patterns = [
+              r'\n  video_player_ohos:.*?\n  (?=\w)',
+              r'\n  path_provider_ohos:.*?\n  (?=\w)',
+              r'\n  record_ohos:.*?\n  (?=\w)',
+              r'\n  url_launcher_ohos:.*?\n  (?=\w)',
+              r'\n  file_selector_ohos:.*?\n  (?=\w)',
+          ]
+          for p in patterns:
+              text = re.sub(p, '\n', text, flags=re.DOTALL)
+          open('pubspec.yaml', 'w').write(text)
+          "
 
       - name: Build APK
         run: |
