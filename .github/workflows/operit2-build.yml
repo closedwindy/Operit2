@@ -92,24 +92,24 @@ jobs:
       - name: Generate Dart proxy artifacts
         run: cargo check --manifest-path core/crates/proxy/local/Cargo.toml --quiet
 
-      - name: Fix video_player and remove ohos
+      - name: Fix pubspec
         run: |
           cd apps/flutter/app
-          sed -i 's/video_player: ^2.11.1/video_player: ^2.10.1/' pubspec.yaml
-          python3 -c "
-          import re
-          text = open('pubspec.yaml').read()
-          patterns = [
-              r'\n  video_player_ohos:.*?\n  (?=\w)',
-              r'\n  path_provider_ohos:.*?\n  (?=\w)',
-              r'\n  record_ohos:.*?\n  (?=\w)',
-              r'\n  url_launcher_ohos:.*?\n  (?=\w)',
-              r'\n  file_selector_ohos:.*?\n  (?=\w)',
-          ]
-          for p in patterns:
-              text = re.sub(p, '\n', text, flags=re.DOTALL)
-          open('pubspec.yaml', 'w').write(text)
-          "
+          sed -i 's/video_player: \^2\.11\.1/video_player: \^2.10.1/' pubspec.yaml
+          cat > /tmp/fix_pub.py << 'FIXEOF'
+import re
+text = open("pubspec.yaml").read()
+for p in [
+    "(?m)^  video_player_ohos:[\s\S]*?(?=^\S)",
+    "(?m)^  path_provider_ohos:[\s\S]*?(?=^\S)",
+    "(?m)^  record_ohos:[\s\S]*?(?=^\S)",
+    "(?m)^  url_launcher_ohos:[\s\S]*?(?=^\S)",
+    "(?m)^  file_selector_ohos:[\s\S]*?(?=^\S)",
+]:
+    text = re.sub(p, "", text)
+open("pubspec.yaml", "w").write(text)
+FIXEOF
+          python3 /tmp/fix_pub.py
 
       - name: Build APK
         run: |
