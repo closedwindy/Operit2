@@ -17,3 +17,4 @@ for name in ["video_player_ohos", "path_provider_ohos", "record_ohos", "url_laun
 open(pubspec_path, "w").write(text)
 print("Done: ohos deps removed, video_player fixed")# trigger build
 # trigger
+# trigger
