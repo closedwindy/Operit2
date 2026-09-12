@@ -69,7 +69,7 @@ jobs:
           keytool -genkey -v -keystore tools/release/secrets/operit2-release.keystore \
             -storepass android -alias androiddebugkey -keypass android \
             -keyalg RSA -keysize 2048 -validity 10000 -dname CN=Debug,O=Debug,C=US
-          printf 'RELEASE_STORE_FILE=operit2-release.keystore\nRELEASE_STORE_PASSWORD=android\nRELEASE_KEY_ALIAS=androiddebugkey\nRELEASE_KEY_PASSWORD=android\n' > tools/release/secrets/android-signing.properties
+          printf '%s\n' 'RELEASE_STORE_FILE=operit2-release.keystore' 'RELEASE_STORE_PASSWORD=android' 'RELEASE_KEY_ALIAS=androiddebugkey' 'RELEASE_KEY_PASSWORD=android' > tools/release/secrets/android-signing.properties
 
       - name: Prepare Web Access placeholders
         run: |
@@ -81,7 +81,14 @@ jobs:
 
       - name: Configure local.properties
         run: |
-          printf 'sdk.dir=%s\nflutter.sdk=%s\nRELEASE_STORE_FILE=%s/tools/release/secrets/operit2-release.keystore\nRELEASE_STORE_PASSWORD=android\nRELEASE_KEY_ALIAS=androiddebugkey\nRELEASE_KEY_PASSWORD=android\n' "$ANDROID_HOME" "$FLUTTER_ROOT" "$GITHUB_WORKSPACE" > apps/flutter/app/android/local.properties
+          cat > apps/flutter/app/android/local.properties << EOF
+          sdk.dir=$ANDROID_HOME
+          flutter.sdk=$FLUTTER_ROOT
+          RELEASE_STORE_FILE=$GITHUB_WORKSPACE/tools/release/secrets/operit2-release.keystore
+          RELEASE_STORE_PASSWORD=android
+          RELEASE_KEY_ALIAS=androiddebugkey
+          RELEASE_KEY_PASSWORD=android
+          EOF
 
       - name: Fix build.gradle.kts for Linux
         run: |
@@ -96,19 +103,31 @@ jobs:
         run: |
           cd apps/flutter/app
           sed -i 's/video_player: \^2\.11\.1/video_player: ^2.10.1/' pubspec.yaml
-          python3 << 'REMOVE_OHOS'
+          cat > /tmp/remove_ohos.py << 'PYSCRIPT'
           import re
           text = open('pubspec.yaml').read()
           for p in [
-              r'\n  video_player_ohos:.*?\n  (?=\w)',
-              r'\n  path_provider_ohos:.*?\n  (?=\w)',
-              r'\n  record_ohos:.*?\n  (?=\w)',
-              r'\n  url_launcher_ohos:.*?\n  (?=\w)',
-              r'\n  file_selector_ohos:.*?\n  (?=\w)',
+              r'
+  video_player_ohos:.*?
+  (?=\w)',
+              r'
+  path_provider_ohos:.*?
+  (?=\w)',
+              r'
+  record_ohos:.*?
+  (?=\w)',
+              r'
+  url_launcher_ohos:.*?
+  (?=\w)',
+              r'
+  file_selector_ohos:.*?
+  (?=\w)',
           ]:
-              text = re.sub(p, '\n', text, flags=re.DOTALL)
+              text = re.sub(p, '
+', text, flags=re.DOTALL)
           open('pubspec.yaml', 'w').write(text)
-          REMOVE_OHOS
+          PYSCRIPT
+          python3 /tmp/remove_ohos.py
 
       - name: Build APK
         run: |
